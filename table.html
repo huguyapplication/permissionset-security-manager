@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Permission set configuration</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="table.css">
+    <link rel="icon" type="image/x-icon" href="/assets/img/icon.png">
+</head>
+<body>
+  <div id="root">  
+    <div class="row">
+    
+      <div class="column">
+        <div>
+          Filter : 
+          <input id="searchObjectFilter" type="text" placeholder="Filter object">
+        </div>
+        <div>
+          <label for="objectSelect">Object selection</label>
+          <select id="objectSelect">
+          </select>
+        </div>
+      </div>
+
+      <div class="column">
+        <div>
+          Filter : 
+          <input id="searchPSFilter" type="text" placeholder="Filter permission set">
+        </div>
+        <div>
+          <label for="permSetSelect">Permission set selection</label>
+          <select id="permSetSelect" size="6" multiple>
+          </select>
+        </div>
+      </div>
+    
+    </div>
+
+    <div class="row">
+      <div class="column">
+        <input type="button" id="configButton" value="Retrieve information">
+      </div>
+      <div class="column">
+        <input type="button" id="saveConfig" value="Save configuration" hidden>
+        <img id="save-loading" src="assets/img/loading.gif" hidden>
+        <img id="save-green-tick" src="assets/img/green-tick.png" hidden>
+      </div>
+      <div class="column">
+        <div>
+          <select id="orgSelect" hidden>
+          </select>
+        </div>
+        <input type="button" id="deployConfig" value="Deploy on another organization" hidden>
+        <img id="deploy-loading" src="assets/img/loading.gif" hidden>
+        <img id="deploy-green-tick" src="assets/img/green-tick.png" hidden>
+      </div>
+    </div>
+    <div>
+      <table id="tabPermissions">
+      </table>
+    </div>
+    <div>
+      <table id="objectPermissions">
+      </table>
+    </div>
+    <div>
+      <table id="fieldPermissions">
+      </table>
+    </div>
+
+  </div>
+</body>
+<script src="table.js"></script>
+</html>

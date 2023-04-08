@@ -1,0 +1,45 @@
+{
+  "name": "Permission set security manager",
+  "description": "Control your Permission set object security",
+  "manifest_version": 3,
+  "version": "0.1",
+  "icons": {
+    "16": "assets/img/icon.png",
+    "32": "assets/img/icon.png",
+    "48": "assets/img/icon.png",
+    "128": "assets/img/icon.png"
+  },
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": "assets/img/icon.png"
+  },
+  "permissions": [
+    "https://*.salesforce.com/*",
+    "https://*.force.com/*",
+    "https://*.cloudforce.com/*",
+    "https://*.visualforce.com/*",
+    "cookies",
+    "https://www.google.com",
+    "google.com",
+    "*.google.com",
+    "*://*.google.com/",
+    "tabs"
+  ],
+  "host_permissions" : [
+    "https://*.salesforce.com/*",
+    "https://*.force.com/*",
+    "https://*.cloudforce.com/*",
+    "https://*.visualforce.com/*",
+    "https://www.google.com",
+    "google.com",
+    "*.google.com",
+    "*://*.google.com/",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; connect-src https://* data: blob: filesystem:;"
+  }
+}
