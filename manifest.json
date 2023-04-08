@@ -19,10 +19,6 @@
     "https://*.cloudforce.com/*",
     "https://*.visualforce.com/*",
     "cookies",
-    "https://www.google.com",
-    "google.com",
-    "*.google.com",
-    "*://*.google.com/",
     "tabs"
   ],
   "host_permissions" : [
@@ -30,10 +26,6 @@
     "https://*.force.com/*",
     "https://*.cloudforce.com/*",
     "https://*.visualforce.com/*",
-    "https://www.google.com",
-    "google.com",
-    "*.google.com",
-    "*://*.google.com/",
     "<all_urls>"
   ],
   "background": {
