@@ -67,3 +67,8 @@ tr {
 #fieldPermissions {
     margin-top: 50px;
 }
+
+.error {
+    font-weight: bold;
+    color : red
+}

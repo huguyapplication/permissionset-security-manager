@@ -2,7 +2,7 @@
   "name": "Permission set security manager",
   "description": "Control your Permission set object security",
   "manifest_version": 3,
-  "version": "0.1",
+  "version": "0.2",
   "icons": {
     "16": "assets/img/icon.png",
     "32": "assets/img/icon.png",

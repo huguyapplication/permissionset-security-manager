@@ -44,6 +44,7 @@
         <input type="button" id="saveConfig" value="Save configuration" hidden>
         <img id="save-loading" src="assets/img/loading.gif" hidden>
         <img id="save-green-tick" src="assets/img/green-tick.png" hidden>
+        <img id="save-red-cross" src="assets/img/red-cross.png" hidden>
       </div>
       <div class="column">
         <div>
@@ -53,6 +54,20 @@
         <input type="button" id="deployConfig" value="Deploy on another organization" hidden>
         <img id="deploy-loading" src="assets/img/loading.gif" hidden>
         <img id="deploy-green-tick" src="assets/img/green-tick.png" hidden>
+        <img id="deploy-red-cross" src="assets/img/red-cross.png" hidden>
+      </div>
+    </div>
+    <div class="row">
+      <div class="column">
+        <span>&nbsp;</span>
+      </div>
+      <div class="column">
+        <span id="save-error" class="error">
+        </span>
+      </div>
+      <div class="column">
+        <span id="deploy-error" class="error">
+        </span>
       </div>
     </div>
     <div>

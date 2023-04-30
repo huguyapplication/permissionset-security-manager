@@ -253,6 +253,21 @@ function formatTabPermissionResponse(data){
     return [dict, permissionToDelete]
 }
 
+function backupTabPermissionResponse(data){
+    var backupData = []
+    var currentDelete = []
+    for (var i = 0; i < data.records.length; i++){
+        currentDelete.push({
+            attributes : {"type" : "PermissionSetTabSetting", "referenceId" : data.records[i].Parent.Name},
+            Name : data.records[i].Name,
+            Visibility : data.records[i].Visibility,
+            ParentId : data.records[i].Parent.attributes.url.split('/').slice(-1)[0]
+        })
+    }
+    backupData.push(currentDelete)
+    return backupData;
+}
+
 function formatObjectPermissionResponse(data){
     var permissionToUpdate = {}
     var dict = {}
@@ -268,10 +283,28 @@ function formatObjectPermissionResponse(data){
     return [dict, permissionToUpdate]
 }
 
+function backupObjectPermissionResponse(data, object){
+    var backupData = []
+    var currentSave = []
+    for (var i = 0; i < data.records.length; i++){
+        currentSave.push({
+            Id : data.records[i].Id,
+            attributes : {"type" : "ObjectPermissions", "referenceId" : data.records[i].Parent.Name},
+            ParentId : data.records[i].Parent.attributes.url.split('/').slice(-1)[0],
+            SobjectType : object,
+            PermissionsEdit : data.records[i].PermissionsEdit,
+            PermissionsRead : data.records[i].PermissionsRead,
+            PermissionsCreate : data.records[i].PermissionsCreate,
+            PermissionsDelete : data.records[i].PermissionsDelete
+        })
+    }
+    backupData.push(currentSave)
+    return backupData
+}
+
 function formatFieldPermissionResponse(data){
     var permissionsToDelete = []
     var currentDelete = []
-    var backupData = data.records;
     var dict = {}
     for (var i = 0; i < data.records.length; i++){
         currentDelete.push(data.records[i].Id)
@@ -285,6 +318,37 @@ function formatFieldPermissionResponse(data){
     }
     permissionsToDelete.push(currentDelete)
     return [dict, permissionsToDelete]
+}
+
+function backupFieldPermissionResponse(data, object){
+    var backupData = []
+    var currentSave = []
+    for (var i = 0; i < data.records.length; i++){
+        currentSave.push({
+            attributes : {"type" : "FieldPermissions", "referenceId" : data.records[i].Parent.Name + "_" + data.records[i].Field.split('.')[1]},
+            Field : data.records[i].Field,
+            SobjectType : object,
+            PermissionsEdit : data.records[i].PermissionsEdit,
+            PermissionsRead : data.records[i].PermissionsRead,
+            ParentId : data.records[i].Parent.attributes.url.split('/').slice(-1)[0]
+        })
+        if (currentSave.length === 199){
+            backupData.push(currentSave);
+            currentSave = []
+        }
+    }
+    backupData.push(currentSave)
+    return backupData
+
+    // currentSave.push({
+    //     attributes : {"type" : "FieldPermissions", "referenceId" : psList[td.getAttribute("name")] + "_" + td.parentNode.getAttribute("name")},
+    //     Field : object+"."+td.parentNode.getAttribute("name"),
+    //     SobjectType : object,
+    //     PermissionsEdit : td.innerText === "Edit",
+    //     PermissionsRead : td.innerText === "Edit" || td.innerText === "Read",
+    //     ParentId : psList[td.getAttribute("name")]
+    // })
+
 }
 
 function getFieldValue(editPermission, readPermission){
@@ -432,7 +496,7 @@ async function getObjectDescription(object){
 
 // Fonctions réalisant le rendu des droits
 async function renderTabPermissions(formattedPermissions, permissionSets){
-    buildHeader("tabPermissions", "Autorisations de l'onglet", "", permissionSets);
+    buildHeader("tabPermissions", "Tab authorizations", "", permissionSets);
     var row = document.createElement('tr');   
     row.setAttribute("name", "tab")
     var column = document.createElement("td")
@@ -457,7 +521,7 @@ async function renderTabPermissions(formattedPermissions, permissionSets){
 }
 
 async function renderObjectPermissions(formattedPermissions, permissionSets){
-    buildHeader("objectPermissions", "Autorisations de l'objet", "", permissionSets);
+    buildHeader("objectPermissions", "Object authorizations", "", permissionSets);
     var objectRights = ["Read", "Create", "Edit", "Delete"];
     for (right of objectRights){
         var row = document.createElement('tr');   
@@ -491,7 +555,7 @@ async function renderObjectPermissions(formattedPermissions, permissionSets){
 }
 
 async function renderFieldPermission(formattedPermissions, object, permissionSets){
-    buildHeader("fieldPermissions", "Autorisations des champs", "Champ", permissionSets)
+    buildHeader("fieldPermissions", "Field authorizations", "Champ", permissionSets)
     // récupérer tous les champs labellisés de l'objet
     await getObjectDescription(object);
     //parcourir pour chaque champ de l'objet, les permissions récupérées
@@ -508,18 +572,99 @@ saveButton.addEventListener("click", saveConfiguration);
 async function saveConfiguration(){
     document.getElementById("save-loading").hidden = false;
     document.getElementById("save-green-tick").hidden = true;
-    var tabPermissionsToSave = tabPermissionToJSON(permsetList);
-    var fieldPermissionsToSave = fieldPermissionToJSON(permsetList);
-    var objectPermissions = objectPermissionToJSON(permsetList, objectPermissionToUpdate);
+    document.getElementById("save-red-cross").hidden = true;
+    document.getElementById("deploy-loading").hidden = true;
+    document.getElementById("deploy-green-tick").hidden = true;
+    document.getElementById("deploy-red-cross").hidden = true;
+    var object = document.getElementById("objectSelect").value;
+    var permissionSets = [...document.getElementById("permSetSelect").options]
+                            .filter(option => option.selected)
+                            .map(option => "'" + option.value + "'");
+    var orgSelect = sfHost;
+    var sid = sessionId;
+
+    var psList = {};
+    const data = await getPermissionSetsList(orgSelect, sid)
+    for (permSet in data.records){
+        psList[data.records[permSet].Name] = data.records[permSet].Id
+    }
+    
+    // Retrieve existing tab data in database
+    const tabResponse = await getTabPermissions(object, permissionSets, orgSelect, sid)
+    var deployTabPermissionToDelete = []
+    var tabPermissionBackupData = []
+    if (tabResponse !== null){
+        var deployTabPermissions = formatTabPermissionResponse(tabResponse);
+        tabPermissionBackupData = backupTabPermissionResponse(tabResponse);
+        deployTabPermissionToDelete = deployTabPermissions[1];
+    }
+
+    // Retrieve existing object data in database
+    const objectResponse = await getObjectPermissions(object, permissionSets, orgSelect, sid)
+    var deployObjectPermission = formatObjectPermissionResponse(objectResponse);
+    var objectPermissionBackupData = backupObjectPermissionResponse(objectResponse, object)
+    var deployObjectPermissionToUpdate = deployObjectPermission[1];
+
+    // Retrieve existing field data in database
+    const fieldResponse = await getFieldPermissions(object, permissionSets, orgSelect, sid)
+    var deployFieldPermission = formatFieldPermissionResponse(fieldResponse)
+    var fieldPermissionBackupData = backupFieldPermissionResponse(fieldResponse, object)
+    var deployFieldPermissionsToDelete = deployFieldPermission[1]
+
+    // Format data to push
+    var tabPermissionsToSave = tabPermissionToJSON(psList);
+    var fieldPermissionsToSave = fieldPermissionToJSON(psList);
+    var objectPermissions = objectPermissionToJSON(psList, deployObjectPermissionToUpdate);
     var objectPermissionsToSave = objectPermissions[0];
     var objectPermissionsToAdd = objectPermissions[1];
-    await deleteCurrentData(sfHost, fieldPermissionsToDelete, tabPermissionToDelete, sessionId)
-    await pushTabPermissionData(tabPermissionsToSave, sfHost, sessionId);
-    await pushFieldPermissionData(fieldPermissionsToSave, sfHost, sessionId);
-    await pushObjectPermissionDataUpdate(objectPermissionsToSave, sfHost, sessionId);
-    await pushObjectPermissionDataCreate(objectPermissionsToAdd, sfHost, sessionId);
+
+    // Push tab permissions
+    await deleteCurrentData(orgSelect, deployFieldPermissionsToDelete, deployTabPermissionToDelete, sid)
+    var tabPushHasErrors = await pushTabPermissionData(tabPermissionsToSave, orgSelect, sid);
+    if (tabPushHasErrors){
+        await pushTabPermissionData(tabPermissionBackupData, orgSelect, sid);
+    } 
+    
+    // Push object permissions
+    var objectUpdatePushHasErrors = await pushObjectPermissionDataUpdate(objectPermissionsToSave, orgSelect, sid);
+    var objectCreatePushHasErrors = await pushObjectPermissionDataCreate(objectPermissionsToAdd, orgSelect, sid);
+    if (objectCreatePushHasErrors){
+        await pushObjectPermissionDataUpdate(objectPermissionBackupData, orgSelect, sid)
+    }
+    
+    // Push Field permission
+    var fieldPushHasErrors = await pushFieldPermissionData(fieldPermissionsToSave, orgSelect, sid);
+    if (fieldPushHasErrors){
+        await pushFieldPermissionData(fieldPermissionBackupData, orgSelect, sid);
+    }
     document.getElementById("save-loading").hidden = true;
-    document.getElementById("save-green-tick").hidden = false;
+
+    if (tabPushHasErrors || objectUpdatePushHasErrors || objectCreatePushHasErrors || fieldPushHasErrors){
+        document.getElementById("save-red-cross").hidden = false;
+        var deployError = document.getElementById("deploy-error");
+        deployError.innerHTML = "&nbsp;"
+        var saveError = document.getElementById("save-error");
+        saveError.innerText = buildErrorMessage(tabPushHasErrors, objectUpdatePushHasErrors, objectCreatePushHasErrors, fieldPushHasErrors)
+    } else {
+        document.getElementById("save-green-tick").hidden = false;
+    }
+}
+
+function buildErrorMessage(tabPushHasErrors, objectUpdatePushHasErrors, objectCreatePushHasErrors, fieldPushHasErrors){
+    var errorMessage = ""
+    if (tabPushHasErrors){
+        errorMessage = tabPushHasErrors + "\n"
+    }
+    if (objectUpdatePushHasErrors){
+        errorMessage = errorMessage + objectUpdatePushHasErrors + "\n"
+    }
+    if (objectCreatePushHasErrors){
+        errorMessage = errorMessage + objectCreatePushHasErrors + "\n"
+    }
+    if (fieldPushHasErrors){
+        errorMessage = errorMessage + fieldPushHasErrors + "\n"
+    }
+    return errorMessage
 }
 
 // Fonction de conversion des droits de champs vers JSON pour appel API
@@ -656,7 +801,7 @@ async function pushFieldPermissionData(toSave, host, sid){
         var body = {
             "records" : batch
         }
-        await fetch(url,
+        const response = await fetch(url,
             {
                 method : "POST",
                 headers : {
@@ -665,6 +810,10 @@ async function pushFieldPermissionData(toSave, host, sid){
                 },
                 body : JSON.stringify(body)
             })
+        if (response.status >= 400 && response.status < 600) {
+            const json = await response.json()
+            return json[0].message
+        }
     }
 }
 
@@ -677,15 +826,20 @@ async function pushObjectPermissionDataUpdate(toSave, host, sid){
                 "records" : batch
             }
             delete objectPermission["Id"]
-            await fetch(url,
+            const response = await fetch(url,
                 {
                     method : "PATCH",
                     headers : {
                         "Content-Type" : "application/json; charset=UTF-8",
                         "Authorization" : "Bearer " + sid
                     },
-                    body : JSON.stringify(objectPermission)
+                    body : JSON.stringify(objectPermission),
+                    allOrNone : false
                 })
+            if (response.status >= 400 && response.status < 600) {
+                const json = await response.json()
+                return json[0].message
+            }
         }
     }
 }
@@ -694,19 +848,25 @@ async function pushObjectPermissionDataUpdate(toSave, host, sid){
 async function pushObjectPermissionDataCreate(toSave, host, sid){
     for (batch of toSave){
         for (objectPermission of batch){
-            let url = "https://" + host + "/services/data/v57.0/sobjects/ObjectPermissions/"
-            var body = {
-                "records" : batch
+            if (objectPermission.PermissionsCreate || objectPermission.PermissionsEdit || objectPermission.PermissionsRead || objectPermission.PermissionsDelete){
+                let url = "https://" + host + "/services/data/v57.0/sobjects/ObjectPermissions/"
+                var body = {
+                    "records" : batch
+                }
+                const response = await fetch(url,
+                    {
+                        method : "POST",
+                        headers : {
+                            "Content-Type" : "application/json; charset=UTF-8",
+                            "Authorization" : "Bearer " + sid
+                        },
+                        body : JSON.stringify(objectPermission)
+                    })
+                if (response.status >= 400 && response.status < 600) {
+                    const json = await response.json()
+                    return json[0].message
+                }
             }
-            await fetch(url,
-                {
-                    method : "POST",
-                    headers : {
-                        "Content-Type" : "application/json; charset=UTF-8",
-                        "Authorization" : "Bearer " + sid
-                    },
-                    body : JSON.stringify(objectPermission)
-                })
         }
     }
 }
@@ -716,17 +876,21 @@ async function pushTabPermissionData(toSave, host, sid){
     for (batch of toSave){
         let url = "https://" + host + "/services/data/v57.0/composite/tree/PermissionSetTabSetting/"
         var body = {
-            "records" : batch
+            "records" : batch,
         }
-        fetch(url,
+        const response = await fetch(url,
             {
                 method : "POST",
                 headers : {
                     "Content-Type" : "application/json; charset=UTF-8",
                     "Authorization" : "Bearer " + sid
                 },
-                body : JSON.stringify(body)
+                body : JSON.stringify(body),
             })
+        if (response.status >= 400 && response.status < 600) {
+            const json = await response.json()
+            return json[0].message
+        }
     }
 }
 
@@ -737,6 +901,10 @@ debloyButton.addEventListener("click", deployConfiguration);
 async function deployConfiguration(){
     document.getElementById("deploy-loading").hidden = false;
     document.getElementById("deploy-green-tick").hidden = true;
+    document.getElementById("deploy-red-cross").hidden = true;
+    document.getElementById("save-loading").hidden = true;
+    document.getElementById("save-green-tick").hidden = true;
+    document.getElementById("save-red-cross").hidden = true;
     var object = document.getElementById("objectSelect").value;
     var permissionSets = [...document.getElementById("permSetSelect").options]
                             .filter(option => option.selected)
@@ -750,31 +918,62 @@ async function deployConfiguration(){
         psList[data.records[permSet].Name] = data.records[permSet].Id
     }
         
+    // Retrieve existing tab data in database
     const tabResponse = await getTabPermissions(object, permissionSets, orgSelect, sid)
     var deployTabPermissionToDelete = []
+    var tabPermissionBackupData = []
     if (tabResponse !== null){
         var deployTabPermissions = formatTabPermissionResponse(tabResponse);
+        tabPermissionBackupData = backupTabPermissionResponse(tabResponse);
         deployTabPermissionToDelete = deployTabPermissions[1];
     }
-    
-    const objetResponse = await getObjectPermissions(object, permissionSets, orgSelect, sid)
-    var deployObjectPermission = formatObjectPermissionResponse(objetResponse);
+
+    // Retrieve existing object data in database
+    const objectResponse = await getObjectPermissions(object, permissionSets, orgSelect, sid)
+    var deployObjectPermission = formatObjectPermissionResponse(objectResponse);
+    var objectPermissionBackupData = backupObjectPermissionResponse(objectResponse, object)
     var deployObjectPermissionToUpdate = deployObjectPermission[1];
-                
-    const fieldPermission = await getFieldPermissions(object, permissionSets, orgSelect, sid)
-    var deployFieldPermission = formatFieldPermissionResponse(fieldPermission)
+
+    // Retrieve existing field data in database
+    const fieldResponse = await getFieldPermissions(object, permissionSets, orgSelect, sid)
+    var deployFieldPermission = formatFieldPermissionResponse(fieldResponse)
+    var fieldPermissionBackupData = backupFieldPermissionResponse(fieldResponse, object)
     var deployFieldPermissionsToDelete = deployFieldPermission[1]
 
+    // Format data to push
     var tabPermissionsToSave = tabPermissionToJSON(psList);
     var fieldPermissionsToSave = fieldPermissionToJSON(psList);
     var objectPermissions = objectPermissionToJSON(psList, deployObjectPermissionToUpdate);
     var objectPermissionsToSave = objectPermissions[0];
     var objectPermissionsToAdd = objectPermissions[1];
+
+    // Push tab permissions
     await deleteCurrentData(orgSelect, deployFieldPermissionsToDelete, deployTabPermissionToDelete, sid)
-    await pushTabPermissionData(tabPermissionsToSave, orgSelect, sid);
-    await pushFieldPermissionData(fieldPermissionsToSave, orgSelect, sid);
-    await pushObjectPermissionDataUpdate(objectPermissionsToSave, orgSelect, sid);
-    await pushObjectPermissionDataCreate(objectPermissionsToAdd, orgSelect, sid);
+    var tabPushHasErrors = await pushTabPermissionData(tabPermissionsToSave, orgSelect, sid);
+    if (tabPushHasErrors){
+        await pushTabPermissionData(tabPermissionBackupData, orgSelect, sid);
+    } 
+    
+    // Push object permissions
+    var objectUpdatePushHasErrors = await pushObjectPermissionDataUpdate(objectPermissionsToSave, orgSelect, sid);
+    var objectCreatePushHasErrors = await pushObjectPermissionDataCreate(objectPermissionsToAdd, orgSelect, sid);
+    if (objectCreatePushHasErrors){
+        await pushObjectPermissionDataUpdate(objectPermissionBackupData, orgSelect, sid)
+    }
+    
+    // Push Field permission
+    var fieldPushHasErrors = await pushFieldPermissionData(fieldPermissionsToSave, orgSelect, sid);
+    if (fieldPushHasErrors){
+        await pushFieldPermissionData(fieldPermissionBackupData, orgSelect, sid);
+    }
     document.getElementById("deploy-loading").hidden = true
-    document.getElementById("deploy-green-tick").hidden = false;
+    if (tabPushHasErrors || objectUpdatePushHasErrors || objectCreatePushHasErrors || fieldPushHasErrors){
+        document.getElementById("deploy-red-cross").hidden = false;
+        var saveError = document.getElementById("save-error");
+        saveError.innerHTML = "&nbsp;"
+        var deployError = document.getElementById("deploy-error");
+        deployError.innerText = buildErrorMessage(tabPushHasErrors, objectUpdatePushHasErrors, objectCreatePushHasErrors, fieldPushHasErrors)
+    } else {
+        document.getElementById("deploy-green-tick").hidden = false;
+    }
 }
