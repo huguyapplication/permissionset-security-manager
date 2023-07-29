@@ -29,9 +29,17 @@
         </div>
         <div>
           <label for="permSetSelect">Permission set selection</label>
-          <select id="permSetSelect" size="6" multiple>
+          <select id="permSetSelect" size="10" multiple>
           </select>
         </div>
+      </div>
+
+      <div class="column">
+        <input type="button" id="deployConfig" value="Deploy on another organization" hidden>
+        <select id="orgSelect" hidden></select>
+        <img id="deploy-loading" src="assets/img/loading.gif" hidden>
+        <img id="deploy-green-tick" src="assets/img/green-tick.png" hidden>
+        <img id="deploy-red-cross" src="assets/img/red-cross.png" hidden>
       </div>
     
     </div>
@@ -39,34 +47,28 @@
     <div class="row">
       <div class="column">
         <input type="button" id="configButton" value="Retrieve information">
-      </div>
-      <div class="column">
         <input type="button" id="saveConfig" value="Save configuration" hidden>
         <img id="save-loading" src="assets/img/loading.gif" hidden>
         <img id="save-green-tick" src="assets/img/green-tick.png" hidden>
         <img id="save-red-cross" src="assets/img/red-cross.png" hidden>
       </div>
-      <div class="column">
-        <div>
-          <select id="orgSelect" hidden>
-          </select>
-        </div>
-        <input type="button" id="deployConfig" value="Deploy on another organization" hidden>
-        <img id="deploy-loading" src="assets/img/loading.gif" hidden>
-        <img id="deploy-green-tick" src="assets/img/green-tick.png" hidden>
-        <img id="deploy-red-cross" src="assets/img/red-cross.png" hidden>
-      </div>
     </div>
     <div class="row">
-      <div class="column">
-        <span>&nbsp;</span>
-      </div>
       <div class="column">
         <span id="save-error" class="error">
         </span>
       </div>
       <div class="column">
+        <span>&nbsp;</span>
+      </div>
+      <div class="column">
         <span id="deploy-error" class="error">
+        </span>
+      </div>
+    </div>
+    <div class="row">
+      <div class="column">
+        <span id="progress-information" class="progress">
         </span>
       </div>
     </div>
@@ -79,6 +81,11 @@
       </table>
     </div>
     <div>
+      <input type="button" id="modeButton" value="Change to selection mode" hidden>
+      <input type="button" id="unselectAllButton" value="Unselect all" hidden>
+      <input type="button" id="editAllButton" value="Edit all" hidden>
+      <input type="button" id="readAllButton" value="Read all" hidden>
+      <input type="button" id="hiddenAllButton" value="Hidden all" hidden>
       <table id="fieldPermissions">
       </table>
     </div>

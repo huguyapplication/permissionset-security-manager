@@ -7,6 +7,11 @@ let sessionId = props.sessionId;
 // let sessionId = "00D8E0000009f3B!AQsAQGvcY1cS0FgQG8wJ0ApmqAkLyjNOb8LWZrFWotiYLVm5zsxGG0JZt.gPRbSdY0eWoNk.1vvCcRGRDjLHHmHMrj6sh7y2"
 var excludedApiNames = ["Name", "Id", "CreatedById", "CreatedDate", "IsDeleted", "LastModifiedById", "LastModifiedDate", "SystemModstamp", "OwnerId", "LastViewedDate", "LastReferencedDate"]
 
+var isSelectionMode = false
+var isUnitMode = true
+
+document.addEventListener("mouseup", onMouseUpSelectionMode)
+
 var searchPSFilter = document.getElementById("searchPSFilter")
 searchPSFilter.addEventListener("keyup", filterPermissionSet);
 function filterPermissionSet(){
@@ -144,7 +149,7 @@ function triggerConfiguration(){
     populateOrgSelect();
     var orgSelect = document.getElementById("orgSelect");
     orgSelect.removeAttribute("hidden");
-
+    modeButton.removeAttribute("hidden");
     resetPermissions(object, permissionSets)
 }
 
@@ -225,15 +230,29 @@ async function getObjectPermissions(object, permissionSets, host, sid){
 async function getFieldPermissions(object, permissionSets, host, sid){
     var query = "Select Id, Field, Parent.Name, Parent.Id, PermissionsEdit, PermissionsRead from FieldPermissions where SobjectType = '" + object + "' and Parent.Name IN (" + permissionSets + ")"
     var url = "https://" + host + "/services/data/v57.0/query/?q=" + query;
-    const response = await fetch(url,
-        {
-            method : "GET",
-            headers : {
-                "Content-Type" : "application/json; charset=UTF-8",
-                "Authorization" : "Bearer " + sid
-            }
-        })
-    return response.json();
+    var returnData = {}
+    var allDataRetrieved = false;
+    while (!allDataRetrieved){
+        if (Object.keys(returnData).length !== 0){
+            url = "https://" + host + data.nextRecordsUrl
+        }
+        var response = await fetch(url,
+            {
+                method : "GET",
+                headers : {
+                    "Content-Type" : "application/json; charset=UTF-8",
+                    "Authorization" : "Bearer " + sid
+                }
+            })
+        var data = await response.json();
+        if (Object.keys(returnData).length === 0){
+            returnData = data;
+        } else {
+            returnData.records = returnData.records.concat(data.records)
+        }
+        allDataRetrieved = (data.nextRecordsUrl === undefined)
+    }
+    return returnData;
 }
 
 // Fonctions permettant de formatter les réponses JSON
@@ -339,16 +358,6 @@ function backupFieldPermissionResponse(data, object){
     }
     backupData.push(currentSave)
     return backupData
-
-    // currentSave.push({
-    //     attributes : {"type" : "FieldPermissions", "referenceId" : psList[td.getAttribute("name")] + "_" + td.parentNode.getAttribute("name")},
-    //     Field : object+"."+td.parentNode.getAttribute("name"),
-    //     SobjectType : object,
-    //     PermissionsEdit : td.innerText === "Edit",
-    //     PermissionsRead : td.innerText === "Edit" || td.innerText === "Read",
-    //     ParentId : psList[td.getAttribute("name")]
-    // })
-
 }
 
 function getFieldValue(editPermission, readPermission){
@@ -381,6 +390,9 @@ function buildHeader(tableTag, captionText, firstColumnHeader, permissionSets){
     row.appendChild(column)
     for (i = 0; i < permissionSets.length; i++){
         var column = document.createElement("th")
+        if (firstColumnHeader === "Champ"){
+            column.addEventListener("click", cellOnClickSelectionMode);
+        }
         column.appendChild(document.createTextNode(permissionSets[i].replaceAll("'", "")));
         row.appendChild(column)
     }
@@ -456,8 +468,11 @@ function buildPermissionLine(field, permissionSets, formattedPermissions){
         // on définit la valeur de la cellule
         var column = document.createElement('td');
         column.setAttribute("name", permissionSetName)
-        column.setAttribute("class", "permission cell-"+fieldPermissionText.toLowerCase());
-        column.addEventListener("click", changeFieldCellValue)
+        column.setAttribute("class", "permission cell-permission cell-"+fieldPermissionText.toLowerCase());
+        column.addEventListener("click", cellOnClickSelectionMode)
+        column.addEventListener("mousedown", cellOnMouseDownSelectionMode);
+        column.addEventListener("mouseover", cellOnMouseOverSelectionMode);
+        column.addEventListener("selectstart", cellOnSelectStartSelectionMode);
         var value = document.createTextNode(fieldPermissionText);
         column.appendChild(value);
         row.appendChild(column);
@@ -571,6 +586,7 @@ saveButton.addEventListener("click", saveConfiguration);
 // Fonction permettant de lancer la sauvegarde
 async function saveConfiguration(){
     document.getElementById("save-loading").hidden = false;
+    document.getElementById("save-error").hidden = true;
     document.getElementById("save-green-tick").hidden = true;
     document.getElementById("save-red-cross").hidden = true;
     document.getElementById("deploy-loading").hidden = true;
@@ -590,6 +606,8 @@ async function saveConfiguration(){
     }
     
     // Retrieve existing tab data in database
+    var progressInformation = document.getElementById("progress-information");
+    progressInformation.innerText = 'Retrieving data from org ... \n'
     const tabResponse = await getTabPermissions(object, permissionSets, orgSelect, sid)
     var deployTabPermissionToDelete = []
     var tabPermissionBackupData = []
@@ -619,6 +637,7 @@ async function saveConfiguration(){
     var objectPermissionsToAdd = objectPermissions[1];
 
     // Push tab permissions
+    progressInformation.innerText = progressInformation.innerText + 'Saving tab permission ... \n'
     await deleteCurrentData(orgSelect, deployFieldPermissionsToDelete, deployTabPermissionToDelete, sid)
     var tabPushHasErrors = await pushTabPermissionData(tabPermissionsToSave, orgSelect, sid);
     if (tabPushHasErrors){
@@ -626,6 +645,7 @@ async function saveConfiguration(){
     } 
     
     // Push object permissions
+    progressInformation.innerText = progressInformation.innerText + 'Saving object permission ... \n'
     var objectUpdatePushHasErrors = await pushObjectPermissionDataUpdate(objectPermissionsToSave, orgSelect, sid);
     var objectCreatePushHasErrors = await pushObjectPermissionDataCreate(objectPermissionsToAdd, orgSelect, sid);
     if (objectCreatePushHasErrors){
@@ -633,11 +653,13 @@ async function saveConfiguration(){
     }
     
     // Push Field permission
+    progressInformation.innerText = progressInformation.innerText + 'Saving field permission ... \n'
     var fieldPushHasErrors = await pushFieldPermissionData(fieldPermissionsToSave, orgSelect, sid);
     if (fieldPushHasErrors){
         await pushFieldPermissionData(fieldPermissionBackupData, orgSelect, sid);
     }
     document.getElementById("save-loading").hidden = true;
+    progressInformation.innerText = ''
 
     if (tabPushHasErrors || objectUpdatePushHasErrors || objectCreatePushHasErrors || fieldPushHasErrors){
         document.getElementById("save-red-cross").hidden = false;
@@ -975,5 +997,132 @@ async function deployConfiguration(){
         deployError.innerText = buildErrorMessage(tabPushHasErrors, objectUpdatePushHasErrors, objectCreatePushHasErrors, fieldPushHasErrors)
     } else {
         document.getElementById("deploy-green-tick").hidden = false;
+    }
+}
+
+
+
+var modeButton = document.getElementById("modeButton");
+modeButton.addEventListener("click", changeMode);
+var unselectAllButton = document.getElementById("unselectAllButton");
+unselectAllButton.addEventListener("click", unselectAll)
+var editAllButton = document.getElementById("editAllButton");
+editAllButton.addEventListener("click", markAllCellsAsEdit)
+var readAllButton = document.getElementById("readAllButton");
+readAllButton.addEventListener("click", markAllCellsAsRead)
+var hiddenAllButton = document.getElementById("hiddenAllButton");
+hiddenAllButton.addEventListener("click", markAllCellsAsHidden)
+
+function changeMode(){
+    isSelectionMode = !isSelectionMode;
+    isUnitMode = !isUnitMode;
+    if (isUnitMode){
+        unselectAll()
+    }
+    updateButtonVisibility();
+}
+
+function updateButtonVisibility(){
+    if (isSelectionMode){
+        modeButton.value = 'Change to unit mode'
+        unselectAllButton.hidden = false;
+        editAllButton.hidden = false;
+        readAllButton.hidden = false;
+        hiddenAllButton.hidden = false;
+    } else {
+        modeButton.value = 'Change to selection mode'
+        unselectAllButton.hidden = true;
+        editAllButton.hidden = true;
+        readAllButton.hidden = true;
+        hiddenAllButton.hidden = true;
+    }
+}
+
+function cellOnClickSelectionMode(event){
+    if (isSelectionMode){
+        if (event.target.tagName === 'TH'){
+            event.target.classList.toggle("highlighted")
+            isHighlighted = event.target.classList.contains("highlighted")
+            for (element of document.getElementsByName(event.target.innerText)){
+                if (element.classList.contains("cell-permission")){
+                    element.classList.toggle("highlighted", isHighlighted)
+                }
+            }
+        }
+    } else {
+        changeFieldCellValue(event)
+    }
+}
+
+var isMouseDown = false;
+var isHighlighted = false;
+function cellOnMouseDownSelectionMode(event){
+    if (isSelectionMode && event.target.tagName === 'TD'){
+        isMouseDown = true
+        event.target.classList.toggle("highlighted")
+        isHighlighted = event.target.classList.contains("highlighted")
+        return false; 
+    }
+}
+
+function cellOnMouseOverSelectionMode(event){
+    if (isSelectionMode && isMouseDown){
+        event.target.classList.toggle("highlighted", isHighlighted)
+    }
+}
+
+function cellOnSelectStartSelectionMode(event){
+    if (isSelectionMode){
+        event.preventDefault();
+    }
+}
+
+function onMouseUpSelectionMode(){
+    isMouseDown = false;
+}
+
+function markAllCellsAsEdit(){
+    elements = document.querySelectorAll("td.highlighted")
+    for (element of elements){
+        if (objectsFields[element.parentNode.getAttribute("name")].updateable) {
+            newValue = "Edit"
+            element.classList.remove("cell-hidden");
+            element.classList.remove("cell-read");
+            element.classList.add("cell-edit")
+        } else {
+            newValue = "Read"
+            element.classList.remove("cell-hidden");
+            element.classList.remove("cell-edit");
+            element.classList.add("cell-read");
+        }
+        element.innerText = newValue;
+    }
+}
+
+function markAllCellsAsRead(){
+    elements = document.querySelectorAll("td.highlighted")
+    for (element of elements){
+        element.classList.remove("cell-hidden");
+        element.classList.remove("cell-edit");
+        element.classList.add("cell-read");
+        element.innerText = "Read";
+    }
+}
+
+function markAllCellsAsHidden(){
+    elements = document.querySelectorAll("td.highlighted")
+    for (element of elements){
+        element.classList.remove("cell-read");
+        element.classList.remove("cell-edit");
+        element.classList.add("cell-hidden");
+        element.innerText = "Hidden";
+    }
+}
+
+function unselectAll(){
+    elements = document.querySelectorAll(".highlighted")
+    for (element of elements){
+        console.log(element.parentNode.innerText)
+        element.classList.remove("highlighted")
     }
 }
